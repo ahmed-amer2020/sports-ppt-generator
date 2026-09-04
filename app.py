@@ -3,7 +3,6 @@ import os
 import docx
 from weasyprint import HTML
 from google import genai
-from google.genai import types
 
 # ضبط إعدادات الصفحة في Streamlit
 st.set_page_config(
@@ -27,7 +26,7 @@ def read_docx(file):
             full_text.append(para.text.strip())
     return "\n".join(full_text)
 
-# دالة توليد كود HTML/CSS الشرائح باستخدام Gemini
+# دالة توليد كود HTML/CSS الشرائح باستخدام Interactions API الحديثة
 def generate_presentation_html(text_content, api_key):
     client = genai.Client(api_key=api_key)
     
@@ -46,7 +45,6 @@ def generate_presentation_html(text_content, api_key):
     5. اكتب الكود كاملاً من <!DOCTYPE html> إلى </html> فقط دون أي مقدمات أو تعليقات خارجية.
 
     هيكل الـ HTML المطلوبة للشرائح:
-    ```html
     <!DOCTYPE html>
     <html lang="ar" dir="rtl">
     <head>
@@ -90,15 +88,16 @@ def generate_presentation_html(text_content, api_key):
         <!-- اكتب 5 شرائح على الأقل متفاعلة ومصممة ببطاقات من المحتوى المرفق -->
     </body>
     </html>
-    ```
     """
     
-    response = client.models.generate_content(
-        model="gemini-2.5-flash",
-        contents=prompt
+    # استخدام Interactions API الموصى بها
+    interaction = client.create(
+        model="gemini-3.6-flash",
+        input=prompt
     )
     
-    clean_html = response.text.replace("```html", "").replace("```", "").strip()
+    output_text = interaction.output_text
+    clean_html = output_text.replace("```html", "").replace("```", "").strip()
     return clean_html
 
 # واجهة رفع الملفات
