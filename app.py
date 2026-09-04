@@ -38,7 +38,7 @@ def create_pptx(slides_data):
         p.text = slide_info.get("title", "شريحة بدون عنوان")
         p.font.size = Pt(32)
         p.font.bold = True
-        p.font.color.rgb = RGBColor(15, 32, 67) # لون أزرق داكن أكاديمي
+        p.font.color.rgb = RGBColor(15, 32, 67)
         
         # إضافة محتوى الشريحة
         txBox2 = slide.shapes.add_textbox(Inches(0.5), Inches(1.8), Inches(9), Inches(5))
@@ -65,7 +65,7 @@ if uploaded_file is not None and api_key:
                 # قراءة الملف
                 text_content = read_docx(uploaded_file)
                 
-                # تهيئة الذكاء الاصطناعي بنموذج مستقر
+                # تهيئة الذكاء الاصطناعي بالنموذج المطلوب
                 genai.configure(api_key=api_key)
                 model = genai.GenerativeModel('gemini-2.5-flash')
                 
@@ -101,7 +101,6 @@ if uploaded_file is not None and api_key:
                 response = model.generate_content(prompt)
                 ai_text = response.text
                 
-                # معالجة النص وتحويله لقوائم
                 slides = []
                 current_slide = None
                 
