@@ -65,9 +65,25 @@ if uploaded_file is not None and api_key:
                 # قراءة الملف
                 text_content = read_docx(uploaded_file)
                 
-                # تهيئة الذكاء الاصطناعي بالنموذج المطلوب
+                # تهيئة المكتبة
                 genai.configure(api_key=api_key)
-                model = genai.GenerativeModel('gemini-2.5-flash')
+                
+                # جلب الموديلات المدعومة تلقائياً لحسابك
+                available_models = []
+                try:
+                    for m in genai.list_models():
+                        if 'generateContent' in m.supported_generation_methods:
+                            available_models.append(m.name)
+                except Exception:
+                    pass
+                
+                # إذا تعذر التحديد الديناميكي، نستخدم القائمة التالية
+                if not available_models:
+                    available_models = [
+                        'models/gemini-2.5-flash',
+                        'models/gemini-2.0-flash',
+                        'models/gemini-1.5-flash'
+                    ]
                 
                 prompt = f"""
                 أنت خبير أكاديمي في كليات التربية الرياضية بمصر. قم بتلخيص هذا البحث واستخراج النقاط الأساسية لصناعة عرض PowerPoint لسيمينار أو مناقشة.
@@ -98,34 +114,50 @@ if uploaded_file is not None and api_key:
                 {text_content[:4000]}
                 """
                 
-                response = model.generate_content(prompt)
-                ai_text = response.text
+                response = None
+                last_error = ""
                 
-                slides = []
-                current_slide = None
+                # تجربة الموديلات المتاحة تلقائياً
+                for model_name in available_models:
+                    try:
+                        model = genai.GenerativeModel(model_name)
+                        response = model.generate_content(prompt)
+                        if response and response.text:
+                            break
+                    except Exception as err:
+                        last_error = str(err)
+                        continue
                 
-                for line in ai_text.split('\n'):
-                    line = line.strip()
-                    if line.startswith("الشريحة"):
-                        if current_slide:
-                            slides.append(current_slide)
-                        current_slide = {"title": line, "content": []}
-                    elif line.startswith("-") and current_slide:
-                        current_slide["content"].append(line.replace("-", "").strip())
-                
-                if current_slide:
-                    slides.append(current_slide)
-                
-                # إنشاء الباوربوينت
-                pptx_file = create_pptx(slides)
-                
-                st.success("تم إنشاء العرض التقديمي بنجاح! 🎉")
-                st.download_button(
-                    label="📥 تحميل ملف PowerPoint",
-                    data=pptx_file,
-                    file_name="عرض_التربية_الرياضية.pptx",
-                    mime="application/vnd.openxmlformats-officedocument.presentationml.presentation"
-                )
+                if not response:
+                    st.error(f"تعذر توليد النص. الخطأ: {last_error}")
+                else:
+                    ai_text = response.text
+                    
+                    slides = []
+                    current_slide = None
+                    
+                    for line in ai_text.split('\n'):
+                        line = line.strip()
+                        if line.startswith("الشريحة"):
+                            if current_slide:
+                                slides.append(current_slide)
+                            current_slide = {"title": line, "content": []}
+                        elif line.startswith("-") and current_slide:
+                            current_slide["content"].append(line.replace("-", "").strip())
+                    
+                    if current_slide:
+                        slides.append(current_slide)
+                    
+                    # إنشاء الباوربوينت
+                    pptx_file = create_pptx(slides)
+                    
+                    st.success("تم إنشاء العرض التقديمي بنجاح! 🎉")
+                    st.download_button(
+                        label="📥 تحميل ملف PowerPoint",
+                        data=pptx_file,
+                        file_name="عرض_التربية_الرياضية.pptx",
+                        mime="application/vnd.openxmlformats-officedocument.presentationml.presentation"
+                    )
                 
             except Exception as e:
                 st.error(f"حدث خطأ أثناء المعالجة: {e}")
