@@ -49,8 +49,7 @@ if uploaded_file is not None and api_key:
             try:
                 text_content = read_docx(uploaded_file)
                 genai.configure(api_key=api_key)
-                model = genai.GenerativeModel('gemini-1.5-flash')
-                
+model = genai.GenerativeModel('gemini-1.5-flash-latest')                
                 prompt = f"""
                 أنت خبير أكاديمي في كليات التربية الرياضية بمصر. قم بتلخيص هذا البحث واستخراج النقاط الأساسية لصناعة عرض PowerPoint لسيمينار أو مناقشة.
                 أخرج النتيجة بنفس الصيغة التالية تماماً:
