@@ -11,8 +11,8 @@ import io
 # 1. إعدادات الصفحة
 st.set_page_config(page_title="صانع العروض التوضيحية الاحترافي - تربية رياضية", page_icon="🏆", layout="wide")
 
-st.title("🏆 صانع العروض البصرية والأكاديمية - تربية رياضية")
-st.write("حمول ملف البحث للحصول على عرض بصري بهيكلية الإنفوجرافيك والبطاقات التوضيحية.")
+st.title("🏆 صانع العروض البصرية والأكاديمية - نمط NotebookLM")
+st.write("حمل ملف البحث الخاص بك للحصول على عرض بصري بهيكلية الإنفوجرافيك والبطاقات التوضيحية الأنيقة.")
 
 # 2. البيانات والمدخلات
 api_key = st.text_input("🔑 أدخل مفتاح Gemini API الخاص بك:", type="password")
@@ -53,7 +53,6 @@ def create_pptx(slides_data, meta_info, logo_bytes=None):
     prs.slide_width = Inches(13.333)
     prs.slide_height = Inches(7.5)
     
-    # ألوان المظهر الحديث (Dark Slate & Premium Orange/Teal)
     BG_COLOR = RGBColor(240, 242, 245)
     HEADER_TEXT_COLOR = RGBColor(30, 41, 59)
     ORANGE_ACCENT = RGBColor(234, 88, 12)
@@ -70,7 +69,7 @@ def create_pptx(slides_data, meta_info, logo_bytes=None):
         bg_shape.fill.fore_color.rgb = BG_COLOR
         bg_shape.line.fill.background()
         
-        # إضافة اللوجو العلوي إن وجد
+        # إضافة الشعار العلوي إن وجد
         if logo_bytes:
             try:
                 logo_stream = io.BytesIO(logo_bytes)
@@ -80,10 +79,8 @@ def create_pptx(slides_data, meta_info, logo_bytes=None):
         
         # ---------------- 1. شريحة الغلاف الرئيسية ----------------
         if idx == 0:
-            # خلفية داكنة فاخرة للغلاف
             bg_shape.fill.fore_color.rgb = RGBColor(15, 23, 42)
             
-            # مربع العنوان الرئيسي
             txBox = slide.shapes.add_textbox(Inches(1.0), Inches(1.8), Inches(11.333), Inches(2.5))
             tf = txBox.text_frame
             tf.word_wrap = True
@@ -94,13 +91,11 @@ def create_pptx(slides_data, meta_info, logo_bytes=None):
             p.font.color.rgb = RGBColor(255, 255, 255)
             p.alignment = PP_ALIGN.RIGHT
             
-            # خط تمييز برتقالي
             accent_bar = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, Inches(1.0), Inches(4.2), Inches(11.333), Inches(0.08))
             accent_bar.fill.solid()
             accent_bar.fill.fore_color.rgb = ORANGE_ACCENT
             accent_bar.line.fill.background()
             
-            # بيانات الباحث والإشراف أسفل الغلاف
             txBox2 = slide.shapes.add_textbox(Inches(1.0), Inches(4.8), Inches(11.333), Inches(2.0))
             tf2 = txBox2.text_frame
             
@@ -122,7 +117,6 @@ def create_pptx(slides_data, meta_info, logo_bytes=None):
 
         # ---------------- 2. باقي الشرائح المصممة كبطاقات إنفوجرافيك ----------------
         else:
-            # العنوان بالتنسيق الرقمي (مثال: 02 | العنوان الرئيسية)
             slide_num_str = f"0{idx+1}" if idx < 9 else f"{idx+1}"
             tx_head = slide.shapes.add_textbox(Inches(0.8), Inches(0.4), Inches(10.5), Inches(1.0))
             tf_head = tx_head.text_frame
@@ -139,7 +133,6 @@ def create_pptx(slides_data, meta_info, logo_bytes=None):
             
             # تقسيم المحتوى إلى بطاقات جانبية أو أعمدة مقسمة تلقائياً
             if num_points <= 3:
-                # تقسيم على شكل أعمدة رأسية عريضة
                 card_width = Inches(11.733)
                 card_height = Inches(1.3)
                 top_pos = Inches(1.6)
@@ -161,7 +154,6 @@ def create_pptx(slides_data, meta_info, logo_bytes=None):
                     
                     top_pos += Inches(1.6)
             else:
-                # تقسيم على شكل شبكة بطاقات (2 Columns Layout)
                 col_width = Inches(5.6)
                 col_gap = Inches(0.533)
                 
@@ -201,7 +193,7 @@ if uploaded_file is not None and api_key:
                 available_models = ['models/gemini-2.5-flash', 'models/gemini-2.0-flash', 'models/gemini-1.5-flash']
                 
                 prompt = f"""
-                أنت مصمم إنفوجرافيك خبير ومحاضر في كليات التربية الرياضية.
+                أنت مصمم إنفوجرافيك خبير ومحاضر في كليات التربية الرياضية تعمل بأسلوب NotebookLM.
                 قم بتقسيم وتلخيص هذا البحث إلى عرض PowerPoint بصري وهيكلي حديث لـ ({research_type}).
                 
                 المعطيات:
