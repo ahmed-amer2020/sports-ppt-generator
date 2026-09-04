@@ -27,24 +27,37 @@ def read_docx(file):
             full_text.append(para.text.strip())
     return "\n".join(full_text)
 
-# دالة العثور التلقائي على الموديل الشغال المتاح في حسابك
+# دالة الجلب التلقائي والديناميكي لأفضل موديل شغال ومتاح في حسابك
 def get_working_model_name(client):
     try:
         models = list(client.models.list())
-        # البحث عن موديل يدعم generateContent ويحتوي على flash
-        for m in models:
-            model_id = getattr(m, 'name', '') or getattr(m, 'id', '')
-            if 'flash' in model_id.lower() and ('generateContent' in getattr(m, 'supported_generation_methods', []) or True):
-                # إزالة البادئة "models/" إذا كانت موجودة
-                return model_id.replace("models/", "")
+        flash_models = []
+        general_models = []
         
-        # خيار إضافي إذا لم نجد flash
-        if models:
-            first_model = getattr(models[0], 'name', '') or getattr(models[0], 'id', '')
-            return first_model.replace("models/", "")
+        for m in models:
+            # استخراج المعرف أو الاسم
+            name = getattr(m, 'name', '') or getattr(m, 'id', '')
+            # التحقق من دعم التوليد
+            methods = getattr(m, 'supported_generation_methods', []) or getattr(m, 'supported_actions', [])
+            
+            # إذا كان الموديل يدعم generateContent
+            if not methods or 'generateContent' in methods:
+                clean_name = name.replace("models/", "")
+                if 'flash' in clean_name.lower():
+                    flash_models.append(clean_name)
+                elif 'gemini' in clean_name.lower():
+                    general_models.append(clean_name)
+
+        # نفضل الموديلات السريعة (flash)، ثم أي موديل gemini آخر
+        if flash_models:
+            return flash_models[0]
+        if general_models:
+            return general_models[0]
+            
     except Exception as e:
-        st.warning(f"تعذر جلب القائمة تلقائياً: {e}، سنستخدم الموديل الافتراضي.")
+        st.warning(f"⚠️ تعذر جلب قائمة الموديلات تلقائياً: {e}، سنحاول استخدام الموديل الافتراضي.")
     
+    # خيار fallback احتياطي
     return "gemini-1.5-flash"
 
 # دالة استخراج كود HTML فقط وتنظيفه من أي نصوص زائدة
@@ -60,7 +73,7 @@ def extract_clean_html(text):
 def generate_presentation_html(text_content, api_key):
     client = genai.Client(api_key=api_key)
     
-    # 🔍 التحديد التلقائي والديناميكي للموديل المتاح
+    # 🔍 التحديد التلقائي والديناميكي للموديل المتاح في حسابك
     active_model = get_working_model_name(client)
     st.info(f"🤖 الموديل النشط والمستخدم تلقائياً: `{active_model}`")
     
