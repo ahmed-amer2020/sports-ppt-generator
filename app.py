@@ -27,18 +27,42 @@ def read_docx(file):
             full_text.append(para.text.strip())
     return "\n".join(full_text)
 
+# دالة العثور التلقائي على الموديل الشغال المتاح في حسابك
+def get_working_model_name(client):
+    try:
+        models = list(client.models.list())
+        # البحث عن موديل يدعم generateContent ويحتوي على flash
+        for m in models:
+            model_id = getattr(m, 'name', '') or getattr(m, 'id', '')
+            if 'flash' in model_id.lower() and ('generateContent' in getattr(m, 'supported_generation_methods', []) or True):
+                # إزالة البادئة "models/" إذا كانت موجودة
+                return model_id.replace("models/", "")
+        
+        # خيار إضافي إذا لم نجد flash
+        if models:
+            first_model = getattr(models[0], 'name', '') or getattr(models[0], 'id', '')
+            return first_model.replace("models/", "")
+    except Exception as e:
+        st.warning(f"تعذر جلب القائمة تلقائياً: {e}، سنستخدم الموديل الافتراضي.")
+    
+    return "gemini-1.5-flash"
+
 # دالة استخراج كود HTML فقط وتنظيفه من أي نصوص زائدة
 def extract_clean_html(text):
     match = re.search(r'<!DOCTYPE html>.*</html>', text, re.DOTALL | re.IGNORECASE)
     if match:
         return match.group(0)
-    # في حال لم يضع الموديل الوسوم
-    text = text.replace("```html", "").replace("```", "").strip()
-    return text
+    clean_text = re.sub(r'^```html', '', text, flags=re.MULTILINE)
+    clean_text = re.sub(r'^```', '', clean_text, flags=re.MULTILINE)
+    return clean_text.strip()
 
-# دالة توليد كود HTML/CSS الشرائح باستخدام SDK الرسمية
+# دالة توليد كود HTML/CSS الشرائح
 def generate_presentation_html(text_content, api_key):
     client = genai.Client(api_key=api_key)
+    
+    # 🔍 التحديد التلقائي والديناميكي للموديل المتاح
+    active_model = get_working_model_name(client)
+    st.info(f"🤖 الموديل النشط والمستخدم تلقائياً: `{active_model}`")
     
     prompt = f"""
     أنت مصمم عروض تقديمية أكاديمية وخبير بالهيكلة البصرية بأسلوب NotebookLM.
@@ -52,7 +76,7 @@ def generate_presentation_html(text_content, api_key):
     2. صمم غلاف متدرج داكن (Dark Gradient Cover) بنفس تصميم الشريحة الأولى.
     3. قسم باقي الشرائح (على الأقل 4 شرائح رئيسية) إلى بطاقات أنيقة (Cards) ذات حواف جانبية بارزة ومربعات إحصائية/أرقام (Metric Boxes) ومقارنات بأعمدة.
     4. استخدم نظام الألوان الداكنة والحيوية (الكحلي الداكن #0f172a، البرتقالي #ea580c، الأزرق #0284c7، الأخضر #10b981).
-    5. قم بإنهاء الكود بالكامل بـ </html> ولا تضف أي شرح خارجي.
+    5. قم بإنهاء الكود بالكامل بـ </html> ولا تضف أي شرح خارجي قبل أو بعد الكود.
 
     استخدم الهيكل التالي كقاعدة صلبة لتنفيذ الشرائح:
     <!DOCTYPE html>
@@ -101,7 +125,7 @@ def generate_presentation_html(text_content, api_key):
     """
     
     response = client.models.generate_content(
-        model="gemini-2.5-flash",
+        model=active_model,
         contents=prompt
     )
     
@@ -117,7 +141,7 @@ if uploaded_file and api_key:
                 text_content = read_docx(uploaded_file)
                 st.info(f"تم قراءة {len(text_content)} حرف من الملف.")
                 
-            with st.spinner("2️⃣ جاري تصمـيم كود HTML وتحويله إلى PDF بصري..."):
+            with st.spinner("2️⃣ جاري تصميم كود HTML وتحويله إلى PDF بصري..."):
                 html_code = generate_presentation_html(text_content, api_key)
                 
                 # تحويل HTML إلى PDF
