@@ -1,4 +1,3 @@
-%%writefile app.py
 import streamlit as st
 import docx
 import google.generativeai as genai
