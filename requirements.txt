@@ -1,4 +1,4 @@
 streamlit
+weasyprint
+google-genai
 python-docx
-google-generativeai
-python-pptx
