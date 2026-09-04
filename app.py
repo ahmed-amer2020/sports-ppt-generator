@@ -1,300 +1,133 @@
 import streamlit as st
+import os
 import docx
-import google.generativeai as genai
-from pptx import Presentation
-from pptx.util import Inches, Pt
-from pptx.dml.color import RGBColor
-from pptx.enum.text import PP_ALIGN
-from pptx.enum.shapes import MSO_SHAPE
-import io
+from weasyprint import HTML
+from google import genai
+from google.genai import types
 
-# 1. إعدادات الصفحة
-st.set_page_config(page_title="صانع العروض التوضيحية الاحترافي - تربية رياضية", page_icon="🏆", layout="wide")
+# ضبط إعدادات الصفحة في Streamlit
+st.set_page_config(
+    page_title="صانع العروض التقديمية | NotebookLM Style",
+    page_icon="🎨",
+    layout="wide"
+)
 
-st.title("🏆 صانع العروض البصرية والأكاديمية - نمط NotebookLM")
-st.write("حمل ملف البحث الخاص بك للحصول على عرض بصري بهيكلية الإنفوجرافيك والبطاقات التوضيحية الأنيقة.")
+st.title("🎨 صانع العروض التقديمية الاحترافية (NotebookLM Style)")
+st.caption("رفع ملف البحث (Word/Docx) وسيقوم الذكاء الاصطناعي بتلخيصه وتوليد عرض بصري PDF بنفس أسلوب البطاقات التفاعلية.")
 
-# 2. البيانات والمدخلات
-api_key = st.text_input("🔑 أدخل مفتاح Gemini API الخاص بك:", type="password")
+# إدخال مفتاح API الخاص بـ Gemini
+api_key = st.sidebar.text_input("مفتاح Gemini API Key:", type="password")
 
-st.markdown("---")
-st.subheader("📋 البيانات التوجيهية للعرض")
-
-col1, col2 = st.columns(2)
-with col1:
-    research_type = st.selectbox(
-        "🎯 نوع العرض المطلوب:",
-        ["مناقشة رسالة (ماجستير / دكتوراه)", "سيمنار تسجيل خطة بحث (Proposal)", "عرض تدريبي / ورقة عمل"]
-    )
-    specialty = st.selectbox(
-        "⚽ التخصص الرياضي الدقيق:",
-        ["التدريب الرياضي وعلوم الحركة", "الإدارة الرياضية والترويح", "المناهج وطرق التدريس", "علوم الصحة والتربية البدنية", "علم النفس الرياضي"]
-    )
-    slides_count = st.select_slider("📊 عدد الشرائح المطلوب:", options=[5, 8, 10, 12], value=8)
-
-with col2:
-    research_title = st.text_input("📌 عنوان البحث / الموضوع الرئيسي:", placeholder="مثل: مبدأ التدريب بناءً على الاستشفاء")
-    researcher_name = st.text_input("👨‍🎓 إعداد (الباحث / الكابتن):", placeholder="مثل: كابتن / عامر")
-    supervisors = st.text_input("👨‍🏫 تحت إشراف:", placeholder="مثل: دكتور محمد إبراهيم جعفر")
-    logo_file = st.file_uploader("🖼️ رفع شعار/لوجو العرض (اختياري - PNG/JPG)", type=["png", "jpg", "jpeg"])
-
-uploaded_file = st.file_uploader("📂 اختر ملف البحث (Docx)", type=["docx"])
-
+# دالة لقراءة النص من ملف Word
 def read_docx(file):
     doc = docx.Document(file)
-    fullText = []
+    full_text = []
     for para in doc.paragraphs:
         if para.text.strip():
-            fullText.append(para.text.strip())
-    return '\n'.join(fullText)
+            full_text.append(para.text.strip())
+    return "\n".join(full_text)
 
-def create_pptx(slides_data, meta_info, logo_bytes=None):
-    prs = Presentation()
-    prs.slide_width = Inches(13.333)
-    prs.slide_height = Inches(7.5)
+# دالة توليد كود HTML/CSS الشرائح باستخدام Gemini
+def generate_presentation_html(text_content, api_key):
+    client = genai.Client(api_key=api_key)
     
-    BG_COLOR = RGBColor(240, 242, 245)
-    HEADER_TEXT_COLOR = RGBColor(30, 41, 59)
-    ORANGE_ACCENT = RGBColor(234, 88, 12)
-    CARD_BG = RGBColor(255, 255, 255)
-    BORDER_COLOR = RGBColor(203, 213, 225)
+    prompt = f"""
+    أنت مصمم عروض تقديمية أكاديمية وخبير بالهيكلة البصرية بأسلوب NotebookLM.
+    قم بتحليل النص التالي المستخرج من بحث أكاديمي، واستخرج منه المحاور الرئيسية وقم بتوليد عرض تقديمي بصري محول إلى كود HTML/CSS متكامل للطباعة بصيغة PDF A4 Landscape.
+
+    النص البحثي:
+    \"\"\"{text_content[:8000]}\"\"\"
+
+    الشروط القاسية في كود HTML المطلوبة:
+    1. اتجاه الصفحة RTL واللغة العربية dir="rtl".
+    2. صمم غلاف متدرج داكن (Dark Gradient Cover) بنفس تصميم الشريحة الأولى.
+    3. قسم باقي الشرائح إلى بطاقات أنيقة (Cards) ذات حواف جانبية بارزة (Border Accents) ومربعات إحصائية/أرقام (Metric Boxes) ومقارنات بأعمدة (Columns).
+    4. استخدم نظام الألوان الداكنة والحيوية (الكحلي الداكن #0f172a، البرتقالي #ea580c، الأزرق #0284c7، الأخضر #10b981).
+    5. اكتب الكود كاملاً من <!DOCTYPE html> إلى </html> فقط دون أي مقدمات أو تعليقات خارجية.
+
+    هيكل الـ HTML المطلوبة للشرائح:
+    ```html
+    <!DOCTYPE html>
+    <html lang="ar" dir="rtl">
+    <head>
+        <meta charset="UTF-8">
+        <style>
+            @page {{ size: A4 landscape; margin: 0; background-color: #0f172a; }}
+            *, *::before, *::after {{ box-sizing: border-box; }}
+            body {{ margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, sans-serif; background-color: #0f172a; color: #334155; }}
+            .slide {{ width: 297mm; height: 210mm; page-break-after: always; position: relative; background-color: #f8fafc; overflow: hidden; padding: 18mm 22mm; }}
+            
+            /* Slide Cover */
+            .slide-cover {{ background: linear-gradient(135deg, #0f172a 0%, #1e293b 60%, #0f172a 100%); display: table; width: 297mm; height: 210mm; padding: 25mm 22mm; }}
+            .cover-content {{ display: table-cell; vertical-align: middle; }}
+            .cover-tag {{ display: inline-block; background: linear-gradient(90deg, #ea580c, #f97316); color: white; padding: 8px 20px; border-radius: 20px; font-size: 13pt; font-weight: bold; margin-bottom: 25px; }}
+            .cover-title {{ color: #ffffff; font-size: 32pt; font-weight: 800; line-height: 1.35; margin-bottom: 18px; }}
+            .cover-subtitle {{ color: #94a3b8; font-size: 17pt; margin-bottom: 35px; }}
+            
+            /* Inner Slide Elements */
+            .header {{ border-bottom: 2px solid #e2e8f0; padding-bottom: 12px; margin-bottom: 22px; }}
+            .slide-num {{ color: #ea580c; font-size: 18pt; font-weight: 800; margin-left: 10px; }}
+            .slide-title {{ color: #0f172a; font-size: 22pt; font-weight: 700; display: inline; }}
+            
+            .card-item {{ background: #ffffff; border-radius: 12px; padding: 16px 22px; margin-bottom: 14px; border-right: 6px solid #ea580c; box-shadow: 0 4px 12px rgba(0,0,0,0.03); border-top: 1px solid #f1f5f9; border-left: 1px solid #f1f5f9; border-bottom: 1px solid #f1f5f9; }}
+            .card-header {{ font-size: 15pt; font-weight: 700; color: #0f172a; margin-bottom: 6px; }}
+            .card-body {{ font-size: 12pt; color: #475569; line-height: 1.6; }}
+            
+            .cols-table {{ width: 100%; border-collapse: separate; border-spacing: 16px 0; }}
+            .col-card {{ width: 50%; vertical-align: top; background: #ffffff; border-radius: 14px; padding: 20px; border-top: 5px solid #0284c7; box-shadow: 0 4px 14px rgba(0,0,0,0.04); }}
+            .col-card.orange {{ border-top-color: #ea580c; }}
+            
+            .metric-box {{ background-color: #f0f9ff; border: 1px solid #bae6fd; border-radius: 10px; padding: 12px; text-align: center; margin-top: 14px; }}
+            .metric-value {{ font-size: 20pt; font-weight: 800; color: #0369a1; }}
+            .metric-desc {{ font-size: 11pt; color: #075985; margin-top: 2px; }}
+            
+            .footer {{ position: absolute; bottom: 10mm; left: 22mm; right: 22mm; font-size: 10pt; color: #94a3b8; border-top: 1px solid #e2e8f0; padding-top: 8px; display: table; width: calc(100% - 44mm); }}
+            .footer-left {{ display: table-cell; text-align: left; }}
+            .footer-right {{ display: table-cell; text-align: right; }}
+        </style>
+    </head>
+    <body>
+        <!-- اكتب 5 شرائح على الأقل متفاعلة ومصممة ببطاقات من المحتوى المرفق -->
+    </body>
+    </html>
+    ```
+    """
     
-    for idx, slide_info in enumerate(slides_data):
-        blank_slide_layout = prs.slide_layouts[6]
-        slide = prs.slides.add_slide(blank_slide_layout)
-        
-        # خلفية الشريحة العامة
-        bg_shape = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, Inches(0), Inches(0), Inches(13.333), Inches(7.5))
-        bg_shape.fill.solid()
-        bg_shape.fill.fore_color.rgb = BG_COLOR
-        bg_shape.line.fill.background()
-        
-        # إضافة الشعار العلوي إن وجد
-        if logo_bytes:
-            try:
-                logo_stream = io.BytesIO(logo_bytes)
-                slide.shapes.add_picture(logo_stream, Inches(11.8), Inches(0.3), Inches(1.1), Inches(1.1))
-            except Exception:
-                pass
-        
-        # ---------------- 1. شريحة الغلاف الرئيسية ----------------
-        if idx == 0:
-            bg_shape.fill.fore_color.rgb = RGBColor(15, 23, 42)
-            
-            txBox = slide.shapes.add_textbox(Inches(1.0), Inches(1.8), Inches(11.333), Inches(2.5))
-            tf = txBox.text_frame
-            tf.word_wrap = True
-            p = tf.paragraphs[0]
-            p.text = meta_info['title'] if meta_info['title'] else slide_info.get("title", "العنوان الرئيسي")
-            p.font.size = Pt(40)
-            p.font.bold = True
-            p.font.color.rgb = RGBColor(255, 255, 255)
-            p.alignment = PP_ALIGN.RIGHT
-            
-            accent_bar = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, Inches(1.0), Inches(4.2), Inches(11.333), Inches(0.08))
-            accent_bar.fill.solid()
-            accent_bar.fill.fore_color.rgb = ORANGE_ACCENT
-            accent_bar.line.fill.background()
-            
-            txBox2 = slide.shapes.add_textbox(Inches(1.0), Inches(4.8), Inches(11.333), Inches(2.0))
-            tf2 = txBox2.text_frame
-            
-            p_res = tf2.paragraphs[0]
-            p_res.text = f"إعداد: {meta_info['researcher']}" if meta_info['researcher'] else ""
-            p_res.font.size = Pt(22)
-            p_res.font.bold = True
-            p_res.font.color.rgb = ORANGE_ACCENT
-            p_res.alignment = PP_ALIGN.RIGHT
-            
-            if meta_info['supervisors']:
-                p_sup = tf2.add_paragraph()
-                p_sup.text = f"تحت إشراف: {meta_info['supervisors']}"
-                p_sup.font.size = Pt(20)
-                p_sup.font.bold = True
-                p_sup.font.color.rgb = RGBColor(226, 232, 240)
-                p_sup.alignment = PP_ALIGN.RIGHT
-                p_sup.space_before = Pt(10)
-
-        # ---------------- 2. باقي الشرائح المصممة كبطاقات إنفوجرافيك ----------------
-        else:
-            slide_num_str = f"0{idx+1}" if idx < 9 else f"{idx+1}"
-            tx_head = slide.shapes.add_textbox(Inches(0.8), Inches(0.4), Inches(10.5), Inches(1.0))
-            tf_head = tx_head.text_frame
-            tf_head.word_wrap = True
-            p_head = tf_head.paragraphs[0]
-            p_head.text = f"{slide_num_str} | {slide_info.get('title', '')}"
-            p_head.font.size = Pt(28)
-            p_head.font.bold = True
-            p_head.font.color.rgb = HEADER_TEXT_COLOR
-            p_head.alignment = PP_ALIGN.RIGHT
-            
-            content_points = slide_info.get("content", [])
-            num_points = len(content_points)
-            
-            # تقسيم المحتوى إلى بطاقات جانبية أو أعمدة مقسمة تلقائياً
-            if num_points <= 3:
-                card_width = Inches(11.733)
-                card_height = Inches(1.3)
-                top_pos = Inches(1.6)
-                
-                for pt in content_points:
-                    card = slide.shapes.add_shape(MSO_SHAPE.ROUNDED_RECTANGLE, Inches(0.8), top_pos, card_width, card_height)
-                    card.fill.solid()
-                    card.fill.fore_color.rgb = CARD_BG
-                    card.line.color.rgb = BORDER_COLOR
-                    
-                    tx = slide.shapes.add_textbox(Inches(1.0), top_pos + Inches(0.15), Inches(11.333), card_height)
-                    tf_card = tx.text_frame
-                    tf_card.word_wrap = True
-                    p_card = tf_card.paragraphs[0]
-                    p_card.text = f"• {pt}"
-                    p_card.font.size = Pt(18)
-                    p_card.font.color.rgb = HEADER_TEXT_COLOR
-                    p_card.alignment = PP_ALIGN.RIGHT
-                    
-                    top_pos += Inches(1.6)
-            else:
-                col_width = Inches(5.6)
-                col_gap = Inches(0.533)
-                
-                for i, pt in enumerate(content_points[:4]):
-                    col_idx = i % 2
-                    row_idx = i // 2
-                    
-                    left_pos = Inches(0.8) + col_idx * (col_width + col_gap) if col_idx == 1 else Inches(0.8)
-                    top_pos = Inches(1.8) + row_idx * Inches(2.5)
-                    
-                    card = slide.shapes.add_shape(MSO_SHAPE.ROUNDED_RECTANGLE, left_pos, top_pos, col_width, Inches(2.2))
-                    card.fill.solid()
-                    card.fill.fore_color.rgb = CARD_BG
-                    card.line.color.rgb = BORDER_COLOR
-                    
-                    tx = slide.shapes.add_textbox(left_pos + Inches(0.2), top_pos + Inches(0.2), col_width - Inches(0.4), Inches(1.8))
-                    tf_card = tx.text_frame
-                    tf_card.word_wrap = True
-                    p_card = tf_card.paragraphs[0]
-                    p_card.text = f"• {pt}"
-                    p_card.font.size = Pt(17)
-                    p_card.font.color.rgb = HEADER_TEXT_COLOR
-                    p_card.alignment = PP_ALIGN.RIGHT
-            
-    binary_output = io.BytesIO()
-    prs.save(binary_output)
-    binary_output.seek(0)
-    return binary_output
-
-if uploaded_file is not None and api_key:
-    if st.button("🚀 إنشاء وتصميم العرض البصري"):
-        with st.spinner("جاري صياغة المحتوى وبناء شرائح الإنفوجرافيك..."):
-            try:
-                text_content = read_docx(uploaded_file)
-                genai.configure(api_key=api_key)
-                
-                available_models = ['models/gemini-2.5-flash', 'models/gemini-2.0-flash', 'models/gemini-1.5-flash']
-                
-                prompt = f"""
-                أنت مصمم إنفوجرافيك خبير ومحاضر في كليات التربية الرياضية تعمل بأسلوب NotebookLM.
-                قم بتقسيم وتلخيص هذا البحث إلى عرض PowerPoint بصري وهيكلي حديث لـ ({research_type}).
-                
-                المعطيات:
-                - التخصص: {specialty}
-                - عدد الشرائح: {slides_count}
-                
-                الشروط:
-                1. صغ النقاط على شكل عبارات إنفوجرافية مكثفة وقصيرة (شديدة الوضوح والتركيز).
-                2. ابدأ كل شريحة بـ "شريحة:" يتبعها العنوان الهيكلي المباشر (مثل: قانون التكيف التعويضي، الفاصل البيولوجي، إلخ).
-                3. تجنب الفقرات الطويلة واجعل كل نقطة تعبر عن مفهوم محدد قابل للعرض في بطاقة.
-
-                الصيغة المطلوبة:
-                شريحة: [عنوان الشريحة]
-                - [مفهوم أو عنصر مكثف]
-                - [مفهوم أو عنصر آخر]
-
-                نص البحث:
-                {text_content[:5000]}
-                """
-                
-                response = None
-                for model_name in available_models:
-                    try:
-                        model = genai.GenerativeModel(model_name)
-                        response = model.generate_content(prompt)
-                        if response and response.text:
-                            break
-                    except Exception:
-                        continue
-                
-                if response:
-                    ai_text = response.text
-                    slides = []
-                    current_slide = None
-                    
-                    for line in ai_text.split('\n'):
-                        line = line.strip()
-                        if line.startswith("شريحة:") or line.startswith("الشريحة"):
-                            if current_slide and current_slide["content"]:
-                                slides.append(current_slide)
-                            clean_title = line.split(":", 1)[-1].strip() if ":" in line else line
-                            current_slide = {"title": clean_title, "content": []}
-                        elif line.startswith("-") and current_slide:
-                            point_text = line.lstrip("-").strip()
-                            if point_text:
-                                current_slide["content"].append(point_text)
-                    
-                    if current_slide and current_slide["content"]:
-                        slides.append(current_slide)
-                    
-                    meta_info = {
-                        'title': research_title,
-                        'researcher': researcher_name,
-                        'supervisors': supervisors,
-                        'specialty': specialty
-                    }
-                    
-                    logo_bytes = logo_file.getvalue() if logo_file else None
-                    
-                    st.session_state['generated_slides'] = slides
-                    st.session_state['meta_info'] = meta_info
-                    st.session_state['pptx_bytes'] = create_pptx(slides, meta_info, logo_bytes)
-                    
-                    st.success("🎉 تم إنشاء العرض التوضيحي بنجاح!")
-
-            except Exception as e:
-                st.error(f"حدث خطأ أثناء المعالجة: {e}")
-
-# 3. المعاينة والتحميل
-if 'generated_slides' in st.session_state:
-    st.markdown("---")
-    st.subheader("👁️ معاينة البطاقات والشرائح قبل التحميل")
-    
-    slides = st.session_state['generated_slides']
-    meta = st.session_state['meta_info']
-    
-    slide_idx = st.slider("اختر الشريحة للمعاينة:", 1, len(slides), 1) - 1
-    selected_slide = slides[slide_idx]
-    
-    with st.container():
-        st.markdown(
-            f"""
-            <div style="border: 2px solid #CBD5E1; border-radius: 12px; padding: 25px; background-color: #F0F2F5; direction: rtl; text-align: right;">
-                <div style="color: #1E293B; font-size: 24px; font-weight: bold; margin-bottom: 15px;">
-                    0{slide_idx+1} | {selected_slide['title']}
-                </div>
-                <hr style="border: 1px solid #EA580C; margin-bottom: 20px;">
-                <div style="font-size: 18px; color: #333; line-height: 1.8;">
-            """,
-            unsafe_allow_html=True
-        )
-        
-        for p in selected_slide['content']:
-            st.markdown(f"<div style='background: white; padding: 12px; border-radius: 8px; margin-bottom: 10px; border-right: 5px solid #EA580C;'>• {p}</div>", unsafe_allow_html=True)
-            
-        st.markdown("</div></div>", unsafe_allow_html=True)
-        
-    st.write("")
-    st.download_button(
-        label="📥 تحميل ملف PowerPoint الإنفوجرافيكي (.pptx)",
-        data=st.session_state['pptx_bytes'],
-        file_name="عرض_إنفوجرافيك_التربية_الرياضية.pptx",
-        mime="application/vnd.openxmlformats-officedocument.presentationml.presentation"
+    response = client.models.generate_content(
+        model="gemini-2.5-flash",
+        contents=prompt
     )
+    
+    clean_html = response.text.replace("```html", "").replace("```", "").strip()
+    return clean_html
+
+# واجهة رفع الملفات
+uploaded_file = st.file_uploader("قم برفع ملف البحث (Docx):", type=["docx"])
+
+if uploaded_file and api_key:
+    if st.button("🚀 ابدأ توليد العرض التقديمي"):
+        with st.spinner("جاري قراءة البحث وتحليله بوساطة Gemini..."):
+            text_content = read_docx(uploaded_file)
+            
+        with st.spinner("جاري تصميم الشرائح بنظام الإنفوجرافيك والبطاقات..."):
+            try:
+                html_code = generate_presentation_html(text_content, api_key)
+                
+                # تحويل HTML إلى PDF
+                pdf_filename = "presentation_notebooklm.pdf"
+                HTML(string=html_code).write_pdf(pdf_filename)
+                
+                st.success("✨ تم توليد العرض التقديمي بنجاح!")
+                
+                # زر تحميل الملف الناتج
+                with open(pdf_filename, "rb") as file:
+                    st.download_button(
+                        label="📥 تحميل العرض التقديمي (PDF)",
+                        data=file,
+                        file_name="عرض_بحثي_احترافي.pdf",
+                        mime="application/pdf"
+                    )
+            except Exception as e:
+                st.error(f"حدث خطأ أثناء التوليد: {str(e)}")
+elif not api_key:
+    st.info("👈 يرجى إدخال مفتاح Gemini API Key في القائمة الجانبية للبدء.")
