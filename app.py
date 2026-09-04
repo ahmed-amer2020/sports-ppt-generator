@@ -27,40 +27,7 @@ def read_docx(file):
             full_text.append(para.text.strip())
     return "\n".join(full_text)
 
-# دالة الجلب التلقائي والديناميكي لأفضل موديل شغال ومتاح في حسابك
-def get_working_model_name(client):
-    try:
-        models = list(client.models.list())
-        flash_models = []
-        general_models = []
-        
-        for m in models:
-            # استخراج المعرف أو الاسم
-            name = getattr(m, 'name', '') or getattr(m, 'id', '')
-            # التحقق من دعم التوليد
-            methods = getattr(m, 'supported_generation_methods', []) or getattr(m, 'supported_actions', [])
-            
-            # إذا كان الموديل يدعم generateContent
-            if not methods or 'generateContent' in methods:
-                clean_name = name.replace("models/", "")
-                if 'flash' in clean_name.lower():
-                    flash_models.append(clean_name)
-                elif 'gemini' in clean_name.lower():
-                    general_models.append(clean_name)
-
-        # نفضل الموديلات السريعة (flash)، ثم أي موديل gemini آخر
-        if flash_models:
-            return flash_models[0]
-        if general_models:
-            return general_models[0]
-            
-    except Exception as e:
-        st.warning(f"⚠️ تعذر جلب قائمة الموديلات تلقائياً: {e}، سنحاول استخدام الموديل الافتراضي.")
-    
-    # خيار fallback احتياطي
-    return "gemini-1.5-flash"
-
-# دالة استخراج كود HTML فقط وتنظيفه من أي نصوص زائدة
+# دالة تنظيف واستخراج كود HTML فقط
 def extract_clean_html(text):
     match = re.search(r'<!DOCTYPE html>.*</html>', text, re.DOTALL | re.IGNORECASE)
     if match:
@@ -69,13 +36,9 @@ def extract_clean_html(text):
     clean_text = re.sub(r'^```', '', clean_text, flags=re.MULTILINE)
     return clean_text.strip()
 
-# دالة توليد كود HTML/CSS الشرائح
+# دالة الذكاء الاصطناعي الشاملة والذكية مع المحاولات المتعددة (Fallback)
 def generate_presentation_html(text_content, api_key):
     client = genai.Client(api_key=api_key)
-    
-    # 🔍 التحديد التلقائي والديناميكي للموديل المتاح في حسابك
-    active_model = get_working_model_name(client)
-    st.info(f"🤖 الموديل النشط والمستخدم تلقائياً: `{active_model}`")
     
     prompt = f"""
     أنت مصمم عروض تقديمية أكاديمية وخبير بالهيكلة البصرية بأسلوب NotebookLM.
@@ -136,13 +99,55 @@ def generate_presentation_html(text_content, api_key):
     </body>
     </html>
     """
-    
-    response = client.models.generate_content(
-        model=active_model,
-        contents=prompt
-    )
-    
-    return extract_clean_html(response.text)
+
+    # 1️⃣ المحاولة الأولى: باستخدام Interactions API المحدثة
+    try:
+        if hasattr(client, 'interactions'):
+            res = client.interactions.create(
+                model="gemini-3.6-flash",
+                input=prompt
+            )
+            raw_text = getattr(res, 'output_text', '') or getattr(res, 'text', '')
+            if raw_text:
+                st.info("🤖 تم التوليد بنجاح عبر: `Interactions API (gemini-3.6-flash)`")
+                return extract_clean_html(raw_text)
+    except Exception:
+        pass
+
+    # 2️⃣ المحاولة الثانية: تجربة قائمة الموديلات الحديثة بالترتيب
+    candidate_models = ["gemini-3.6-flash", "gemini-3.5-flash", "gemini-2.5-flash"]
+    for model_name in candidate_models:
+        try:
+            res = client.models.generate_content(
+                model=model_name,
+                contents=prompt
+            )
+            if res.text:
+                st.info(f"🤖 تم التوليد بنجاح عبر الموديل: `{model_name}`")
+                return extract_clean_html(res.text)
+        except Exception:
+            continue
+
+    # 3️⃣ المحاولة الثالثة: الفحص التلقائي الشامل لجميع الموديلات المتاحة في حسابك
+    try:
+        available_models = list(client.models.list())
+        for m in available_models:
+            m_id = (getattr(m, 'name', '') or getattr(m, 'id', '')).replace("models/", "")
+            if 'gemini' in m_id.lower():
+                try:
+                    res = client.models.generate_content(
+                        model=m_id,
+                        contents=prompt
+                    )
+                    if res.text:
+                        st.info(f"🤖 تم التوليد بنجاح بعد الفحص الشامل للموديل المتاح: `{m_id}`")
+                        return extract_clean_html(res.text)
+                except Exception:
+                    continue
+    except Exception as e:
+        raise RuntimeError(f"تعذر الوصول لأي موديل شغال في حسابك. التفاصيل: {str(e)}")
+
+    raise RuntimeError("لم يستجب أي موديل من موديلات Gemini المتاحة بـ API Key الخاص بك.")
 
 # واجهة رفع الملفات
 uploaded_file = st.file_uploader("قم برفع ملف البحث (Docx):", type=["docx"])
