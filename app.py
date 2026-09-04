@@ -1,22 +1,60 @@
-# دالة توليد كود HTML/CSS الشرائح باستخدام google-genai SDK الرسمية
+import streamlit as st
+import os
+import re
+import docx
+from weasyprint import HTML
+from google import genai
+
+# ضبط إعدادات الصفحة في Streamlit
+st.set_page_config(
+    page_title="صانع العروض التقديمية | NotebookLM Style",
+    page_icon="🎨",
+    layout="wide"
+)
+
+st.title("🎨 صانع العروض التقديمية الاحترافية (NotebookLM Style)")
+st.caption("رفع ملف البحث (Word/Docx) وسيقوم الذكاء الاصطناعي بتلخيصه وتوليد عرض بصري PDF بنفس أسلوب البطاقات التفاعلية.")
+
+# إدخال مفتاح API الخاص بـ Gemini
+api_key = st.sidebar.text_input("مفتاح Gemini API Key:", type="password")
+
+# دالة لقراءة النص من ملف Word
+def read_docx(file):
+    doc = docx.Document(file)
+    full_text = []
+    for para in doc.paragraphs:
+        if para.text.strip():
+            full_text.append(para.text.strip())
+    return "\n".join(full_text)
+
+# دالة استخراج كود HTML فقط وتنظيفه من أي نصوص زائدة
+def extract_clean_html(text):
+    match = re.search(r'<!DOCTYPE html>.*</html>', text, re.DOTALL | re.IGNORECASE)
+    if match:
+        return match.group(0)
+    # في حال لم يضع الموديل الوسوم
+    text = text.replace("```html", "").replace("```", "").strip()
+    return text
+
+# دالة توليد كود HTML/CSS الشرائح باستخدام SDK الرسمية
 def generate_presentation_html(text_content, api_key):
     client = genai.Client(api_key=api_key)
     
     prompt = f"""
     أنت مصمم عروض تقديمية أكاديمية وخبير بالهيكلة البصرية بأسلوب NotebookLM.
-    قم بتحليل النص التالي المستخرج من بحث أكاديمي، واستخرج منه المحاور الرئيسية وقم بتوليد عرض تقديمي بصري محول إلى كود HTML/CSS متكامل للطباعة بصيغة PDF A4 Landscape.
+    قم بتحليل النص البحثي التالي واستخرج منه المحاور الرئيسية، ثم قم بتوليد عرض تقديمي بصري محول إلى كود HTML/CSS متكامل للطباعة بصيغة PDF A4 Landscape.
 
     النص البحثي:
     \"\"\"{text_content[:8000]}\"\"\"
 
-    الشروط القاسية في كود HTML المطلوبة:
+    الشروط القاسية في كود HTML المطلوب:
     1. اتجاه الصفحة RTL واللغة العربية dir="rtl".
     2. صمم غلاف متدرج داكن (Dark Gradient Cover) بنفس تصميم الشريحة الأولى.
-    3. قسم باقي الشرائح إلى بطاقات أنيقة (Cards) ذات حواف جانبية بارزة (Border Accents) ومربعات إحصائية/أرقام (Metric Boxes) ومقارنات بأعمدة (Columns).
+    3. قسم باقي الشرائح (على الأقل 4 شرائح رئيسية) إلى بطاقات أنيقة (Cards) ذات حواف جانبية بارزة ومربعات إحصائية/أرقام (Metric Boxes) ومقارنات بأعمدة.
     4. استخدم نظام الألوان الداكنة والحيوية (الكحلي الداكن #0f172a، البرتقالي #ea580c، الأزرق #0284c7، الأخضر #10b981).
-    5. اكتب الكود كاملاً من <!DOCTYPE html> إلى </html> فقط دون أي مقدمات أو تعليقات خارجية.
+    5. قم بإنهاء الكود بالكامل بـ </html> ولا تضف أي شرح خارجي.
 
-    هيكل الـ HTML المطلوبة للشرائح:
+    استخدم الهيكل التالي كقاعدة صلبة لتنفيذ الشرائح:
     <!DOCTYPE html>
     <html lang="ar" dir="rtl">
     <head>
@@ -31,8 +69,8 @@ def generate_presentation_html(text_content, api_key):
             .slide-cover {{ background: linear-gradient(135deg, #0f172a 0%, #1e293b 60%, #0f172a 100%); display: table; width: 297mm; height: 210mm; padding: 25mm 22mm; }}
             .cover-content {{ display: table-cell; vertical-align: middle; }}
             .cover-tag {{ display: inline-block; background: linear-gradient(90deg, #ea580c, #f97316); color: white; padding: 8px 20px; border-radius: 20px; font-size: 13pt; font-weight: bold; margin-bottom: 25px; }}
-            .cover-title {{ color: #ffffff; font-size: 32pt; font-weight: 800; line-height: 1.35; margin-bottom: 18px; }}
-            .cover-subtitle {{ color: #94a3b8; font-size: 17pt; margin-bottom: 35px; }}
+            .cover-title {{ color: #ffffff; font-size: 30pt; font-weight: 800; line-height: 1.35; margin-bottom: 18px; }}
+            .cover-subtitle {{ color: #94a3b8; font-size: 16pt; margin-bottom: 35px; }}
             
             /* Inner Slide Elements */
             .header {{ border-bottom: 2px solid #e2e8f0; padding-bottom: 12px; margin-bottom: 22px; }}
@@ -57,16 +95,46 @@ def generate_presentation_html(text_content, api_key):
         </style>
     </head>
     <body>
-        <!-- اكتب 5 شرائح على الأقل متفاعلة ومصممة ببطاقات من المحتوى المرفق -->
+        <!-- مولد الشرائح هنا -->
     </body>
     </html>
     """
     
-    # الاستدعاء الصحيح للذكاء الاصطناعي في SDK
     response = client.models.generate_content(
         model="gemini-2.5-flash",
         contents=prompt
     )
     
-    clean_html = response.text.replace("```html", "").replace("```", "").strip()
-    return clean_html
+    return extract_clean_html(response.text)
+
+# واجهة رفع الملفات
+uploaded_file = st.file_uploader("قم برفع ملف البحث (Docx):", type=["docx"])
+
+if uploaded_file and api_key:
+    if st.button("🚀 ابدأ توليد العرض التقديمي"):
+        try:
+            with st.spinner("1️⃣ جاري قراءة البحث وتحليله..."):
+                text_content = read_docx(uploaded_file)
+                st.info(f"تم قراءة {len(text_content)} حرف من الملف.")
+                
+            with st.spinner("2️⃣ جاري تصمـيم كود HTML وتحويله إلى PDF بصري..."):
+                html_code = generate_presentation_html(text_content, api_key)
+                
+                # تحويل HTML إلى PDF
+                pdf_filename = "presentation_notebooklm.pdf"
+                HTML(string=html_code).write_pdf(pdf_filename)
+                
+                st.success("✨ تم توليد العرض التقديمي بنجاح!")
+                
+                # زر تحميل الملف الناتج
+                with open(pdf_filename, "rb") as file:
+                    st.download_button(
+                        label="📥 تحميل العرض التقديمي (PDF)",
+                        data=file,
+                        file_name="عرض_بحثي_احترافي.pdf",
+                        mime="application/pdf"
+                    )
+        except Exception as e:
+            st.error(f"❌ حدث خطأ أثناء التوليد: {str(e)}")
+elif not api_key:
+    st.info("👈 يرجى إدخال مفتاح Gemini API Key في القائمة الجانبية للبدء.")
