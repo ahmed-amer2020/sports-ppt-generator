@@ -1,32 +1,4 @@
-import streamlit as st
-import os
-import docx
-from weasyprint import HTML
-from google import genai
-
-# ضبط إعدادات الصفحة في Streamlit
-st.set_page_config(
-    page_title="صانع العروض التقديمية | NotebookLM Style",
-    page_icon="🎨",
-    layout="wide"
-)
-
-st.title("🎨 صانع العروض التقديمية الاحترافية (NotebookLM Style)")
-st.caption("رفع ملف البحث (Word/Docx) وسيقوم الذكاء الاصطناعي بتلخيصه وتوليد عرض بصري PDF بنفس أسلوب البطاقات التفاعلية.")
-
-# إدخال مفتاح API الخاص بـ Gemini
-api_key = st.sidebar.text_input("مفتاح Gemini API Key:", type="password")
-
-# دالة لقراءة النص من ملف Word
-def read_docx(file):
-    doc = docx.Document(file)
-    full_text = []
-    for para in doc.paragraphs:
-        if para.text.strip():
-            full_text.append(para.text.strip())
-    return "\n".join(full_text)
-
-# دالة توليد كود HTML/CSS الشرائح باستخدام Interactions API الحديثة
+# دالة توليد كود HTML/CSS الشرائح باستخدام google-genai SDK الرسمية
 def generate_presentation_html(text_content, api_key):
     client = genai.Client(api_key=api_key)
     
@@ -90,43 +62,11 @@ def generate_presentation_html(text_content, api_key):
     </html>
     """
     
-    # استخدام Interactions API الموصى بها
-    interaction = client.create(
-        model="gemini-3.6-flash",
-        input=prompt
+    # الاستدعاء الصحيح للذكاء الاصطناعي في SDK
+    response = client.models.generate_content(
+        model="gemini-2.5-flash",
+        contents=prompt
     )
     
-    output_text = interaction.output_text
-    clean_html = output_text.replace("```html", "").replace("```", "").strip()
+    clean_html = response.text.replace("```html", "").replace("```", "").strip()
     return clean_html
-
-# واجهة رفع الملفات
-uploaded_file = st.file_uploader("قم برفع ملف البحث (Docx):", type=["docx"])
-
-if uploaded_file and api_key:
-    if st.button("🚀 ابدأ توليد العرض التقديمي"):
-        with st.spinner("جاري قراءة البحث وتحليله بوساطة Gemini..."):
-            text_content = read_docx(uploaded_file)
-            
-        with st.spinner("جاري تصميم الشرائح بنظام الإنفوجرافيك والبطاقات..."):
-            try:
-                html_code = generate_presentation_html(text_content, api_key)
-                
-                # تحويل HTML إلى PDF
-                pdf_filename = "presentation_notebooklm.pdf"
-                HTML(string=html_code).write_pdf(pdf_filename)
-                
-                st.success("✨ تم توليد العرض التقديمي بنجاح!")
-                
-                # زر تحميل الملف الناتج
-                with open(pdf_filename, "rb") as file:
-                    st.download_button(
-                        label="📥 تحميل العرض التقديمي (PDF)",
-                        data=file,
-                        file_name="عرض_بحثي_احترافي.pdf",
-                        mime="application/pdf"
-                    )
-            except Exception as e:
-                st.error(f"حدث خطأ أثناء التوليد: {str(e)}")
-elif not api_key:
-    st.info("👈 يرجى إدخال مفتاح Gemini API Key في القائمة الجانبية للبدء.")
